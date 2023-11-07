@@ -1,0 +1,170 @@
+---
+title: "MachineLearningPredictionAssignment"
+author: "AC"
+date: "6/19/2021"
+output: html_document
+---
+
+## Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+# Loading, cleaning and partitioning the data
+
+```{r setup, echo = TRUE}
+
+##Loading the necessary libraries
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(rattle)
+library(corrplot)
+
+##Download the data 
+training <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+                     na.strings=c("NA","#DIV/0!", ""))
+
+test <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                 na.strings=c("NA","#DIV/0!", ""))
+
+#removing the first 5 variables as these are not important for the prediction
+trainingc <- training[,-c(1:5)]
+testc <- test [,-c(1:5)]
+dim (trainingc)
+#remove columns that only have NA's
+trainingc <- trainingc[, colSums(is.na(trainingc)) == 0]
+testc <- testc[, colSums(is.na(testc)) == 0]
+
+#remove near zero variance columns 
+
+NZV <- nearZeroVar(trainingc)
+trainingc <- trainingc[,-NZV]
+testc <- testc[,-NZV]
+
+## partitioning
+set.seed(555)
+inTrain  <- createDataPartition(trainingc$classe, p = 0.6, list = FALSE)
+trainp    <- trainingc[inTrain, ]
+testingp     <- trainingc[-inTrain, ]
+             
+```
+
+
+## Correlation Analysis
+
+```{r cor, cache=TRUE, echo=TRUE}
+
+M<-cor(trainp[,-54])
+corrplot(M, order = "FPC", method="circle", type = "lower", tl.cex = 0.45, 
+         tl.col = rgb(0, 0, 0))
+```
+This analalysis allows to highlight the most correlated variables in the dataset, some appear to show a positive correlation (blue) others a negative correlation (red). However, the correlation between most variabls is poor. On the next step when prediction models will be evaluated all variables will be considered. 
+
+## Prediction Model Building 
+
+Three different model algorithms will be explored, and the one with the best out-of-sample accuracy will be selected for predicting the class of the testc dataset. 
+
+Decision tree with CART (dt)
+Stochastic gradient boosting trees (gbm)
+Random forest decision trees (rf)
+
+
+# decision tree model
+
+```{r dt, cache=TRUE, echo=TRUE}
+
+modelDT  <- rpart(classe ~ ., data = trainp, method="class")
+
+
+```
+
+
+
+# Generalized Boosted Model (GBM)
+
+```{r gmb, cache=TRUE, message=FALSE}
+
+modelBM <- train(classe ~.,
+                data = trainp,
+                method = "gbm",
+                trControl = trainControl(method="repeatedcv",
+                                           number = 5,repeats = 1),
+                                    verbose = FALSE)
+```
+
+
+# random forest model 
+```{r rf, cache=TRUE, echo=TRUE}
+
+modelRF  <- train( classe ~.,
+                   data = trainp,
+                   method = "rf",
+                   trControl = trainControl(method="cv",number=3) )
+```
+
+# Prediction DT
+```{r predDT, cache=TRUE}
+
+predDT <- predict(modelDT, newdata = testingp, type="class")
+confmatrixDT <- confusionMatrix(predDT, as.factor(testingp$classe))
+print(confmatrixDT)
+head(predDT)
+
+#Plot the predictive accuracy of the decision tree model.
+
+plot(confmatrixDT$table, col = confmatrixDT$byClass, 
+     main = paste("Decision Tree Model: Predictive Accuracy =",
+                  round(confmatrixDT$overall['Accuracy']*100, 1), "%"))
+
+
+```
+
+The predictive accuracy of the decision tree model is ~73%.
+
+## Model Assessment (accuracy/Out of sample error using the partitioned data)
+
+
+# Prediction RF
+```{r predRF, cache=TRUE}
+predRF <- predict(modelRF, testingp)
+confmatrixrf <- confusionMatrix(predRF, as.factor(testingp$classe))
+print(confmatrixrf)
+
+#Plot the predictive accuracy of the random forest model.
+
+plot(confmatrixrf$table, col = confmatrixrf$byClass, 
+     main = paste("Random Forest: Predictive Accuracy =",
+                  round(confmatrixrf$overall['Accuracy']*100, 1), "%"))
+
+
+```
+
+The predictive accuracy of the Random Forest model is 99.7%.
+
+
+
+# Prediction GBM
+```{r predgbm, cache=TRUE}
+predgbm <- predict(modelBM, testingp)
+confmatrixgbm <- confusionMatrix(predgbm, as.factor(testingp$classe))
+print(confmatrixgbm)
+
+#Plot the predictive accuracy of the generalized boosted model.
+
+plot(confmatrixgbm$table, col = confmatrixDT$byClass, 
+     main = paste("Generalized Boosting Model: Predictive Accuracy =",
+                  round(confmatrixgbm$overall['Accuracy']*100, 1), "%"))
+```
+
+The predictive accuracy of the GBM is relatively high at 98.6 %.
+
+## Results
+When comparing the 3 models, the GBM and the RF out perform the DT with the best accuracy and out of sample errors, with RF perfomring better than the GBM however the performance between these last two models was a closer.
+Using the model with the best accuracy, the random forest model,  on the test data set (testc).
+
+```{r predTesting, cache=TRUE}
+predTesting <- predict(modelRF, newdata = testc)
+print(predTesting)
+```
+
