@@ -12,3 +12,8 @@ Week 2 - Introduction to NLTK. Create a spelling recommender function that uses 
 Week 3 - Explore text message data and create models to predict if a message is spam or not.
 
 Week 4 - Document Similarity & Topic Modelling
+
+
+# Additional Small Projects - Parsing Folder
+
+Scripts for extracting data to be used in ML projects.
